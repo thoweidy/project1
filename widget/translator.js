@@ -4,67 +4,78 @@
   var CONFIG = {
     defaultLocale: "en",
     locales: {
-      en: { label: "English", flag: "🇺🇸" },
-      es: { label: "Español", flag: "🇪🇸" },
-      hy: { label: "Հայերեն", flag: "🇦🇲" },
-      ru: { label: "Русский", flag: "🇷🇺" },
-      zh: { label: "中文", flag: "🇨🇳" },
+      en: { label: "English", flag: "🇺🇸", code: "en" },
+      es: { label: "Español", flag: "🇪🇸", code: "es" },
+      hy: { label: "Հայերեն", flag: "🇦🇲", code: "hy" },
+      ru: { label: "Русский", flag: "🇷🇺", code: "ru" },
+      zh: { label: "中文", flag: "🇨🇳", code: "zh-CN" },
     },
     storageKey: "angelfood-lang",
-    // Set this to where your locale JSON files are hosted.
-    // If using GitHub Pages: https://<user>.github.io/<repo>/widget/locales
-    // Falls back to same-origin /widget/locales if not set via data attribute.
+    cacheKey: "angelfood-auto-translations",
     baseUrl: null,
+    autoTranslate: true,
+    minAutoTranslateLength: 4,
+    batchDelay: 300,
   };
 
   var currentLocale = CONFIG.defaultLocale;
   var translations = {};
+  var autoTranslationCache = {};
   var originalTexts = new Map();
   var isTranslating = false;
+  var pendingAutoTranslations = [];
+  var batchTimer = null;
 
   // ---------------------------------------------------------------------------
   // Utilities
   // ---------------------------------------------------------------------------
 
   function getStoredLocale() {
-    try {
-      return localStorage.getItem(CONFIG.storageKey);
-    } catch (_) {
-      return null;
-    }
+    try { return localStorage.getItem(CONFIG.storageKey); }
+    catch (_) { return null; }
   }
 
   function storeLocale(locale) {
+    try { localStorage.setItem(CONFIG.storageKey, locale); }
+    catch (_) {}
+  }
+
+  function loadAutoCache() {
     try {
-      localStorage.setItem(CONFIG.storageKey, locale);
+      var raw = localStorage.getItem(CONFIG.cacheKey);
+      if (raw) autoTranslationCache = JSON.parse(raw);
     } catch (_) {
-      // storage unavailable
+      autoTranslationCache = {};
     }
+  }
+
+  function saveAutoCache() {
+    try {
+      localStorage.setItem(CONFIG.cacheKey, JSON.stringify(autoTranslationCache));
+    } catch (_) {}
+  }
+
+  function getCacheKey(text, locale) {
+    return locale + "::" + text;
   }
 
   function resolveBaseUrl() {
     if (CONFIG.baseUrl) return CONFIG.baseUrl;
 
-    var script = document.querySelector(
-      'script[data-angelfood-translations-url]'
-    );
-    if (script) {
-      return script.getAttribute("data-angelfood-translations-url");
-    }
+    var script = document.querySelector('script[data-angelfood-translations-url]');
+    if (script) return script.getAttribute("data-angelfood-translations-url");
 
     var scripts = document.querySelectorAll("script[src]");
     for (var i = 0; i < scripts.length; i++) {
       var src = scripts[i].getAttribute("src");
-      if (src && src.indexOf("translator.js") !== -1) {
+      if (src && src.indexOf("translator.js") !== -1)
         return src.replace(/translator\.js.*$/, "locales");
-      }
     }
-
     return "/widget/locales";
   }
 
   // ---------------------------------------------------------------------------
-  // Translation loading
+  // Static translation loading
   // ---------------------------------------------------------------------------
 
   function loadTranslations(locale, callback) {
@@ -75,9 +86,7 @@
     }
 
     var url = resolveBaseUrl().replace(/\/+$/, "") + "/" + locale + ".json";
-    var cacheBust = "?v=" + Date.now();
-
-    fetch(url + cacheBust)
+    fetch(url + "?v=" + Date.now())
       .then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
@@ -109,6 +118,75 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Auto-translation via free MyMemory API
+  // ---------------------------------------------------------------------------
+
+  function autoTranslateText(text, locale, callback) {
+    var ck = getCacheKey(text, locale);
+    if (autoTranslationCache[ck]) {
+      callback(autoTranslationCache[ck]);
+      return;
+    }
+
+    var langCode = CONFIG.locales[locale] ? CONFIG.locales[locale].code : locale;
+    var url = "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text.substring(0, 500)) +
+      "&langpair=en|" + langCode;
+
+    fetch(url)
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
+          var translated = data.responseData.translatedText;
+          if (translated.toUpperCase() !== text.toUpperCase()) {
+            autoTranslationCache[ck] = translated;
+            saveAutoCache();
+            callback(translated);
+          }
+        }
+      })
+      .catch(function () {});
+  }
+
+  function queueAutoTranslation(textNode, text) {
+    pendingAutoTranslations.push({ node: textNode, text: text });
+    clearTimeout(batchTimer);
+    batchTimer = setTimeout(processBatch, CONFIG.batchDelay);
+  }
+
+  function processBatch() {
+    var batch = pendingAutoTranslations.splice(0, 10);
+    var delay = 0;
+
+    batch.forEach(function (item) {
+      setTimeout(function () {
+        var ck = getCacheKey(item.text, currentLocale);
+        if (autoTranslationCache[ck]) {
+          applyAutoTranslation(item.node, item.text, autoTranslationCache[ck]);
+          return;
+        }
+
+        autoTranslateText(item.text, currentLocale, function (translated) {
+          applyAutoTranslation(item.node, item.text, translated);
+        });
+      }, delay);
+      delay += 150;
+    });
+
+    if (pendingAutoTranslations.length > 0) {
+      batchTimer = setTimeout(processBatch, delay + CONFIG.batchDelay);
+    }
+  }
+
+  function applyAutoTranslation(textNode, originalText, translated) {
+    try {
+      if (textNode.nodeValue && textNode.nodeValue.trim() === originalText) {
+        textNode.nodeValue = textNode.nodeValue.replace(originalText, translated);
+      }
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
   // DOM text replacement
   // ---------------------------------------------------------------------------
 
@@ -118,38 +196,21 @@
       NodeFilter.SHOW_TEXT,
       {
         acceptNode: function (node) {
-          if (!node.nodeValue || !node.nodeValue.trim()) {
-            return NodeFilter.FILTER_REJECT;
-          }
+          if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
           var parent = node.parentElement;
           if (!parent) return NodeFilter.FILTER_REJECT;
           var tag = parent.tagName;
-          if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT") {
+          if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "IFRAME")
             return NodeFilter.FILTER_REJECT;
-          }
-          // Skip the translator widget itself
-          if (parent.closest("#angelfood-translator")) {
+          if (parent.closest("#angelfood-translator"))
             return NodeFilter.FILTER_REJECT;
-          }
           return NodeFilter.FILTER_ACCEPT;
         },
       }
     );
-
     var nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
     return nodes;
-  }
-
-  function buildLookup() {
-    var byEnglish = {};
-    for (var key in translations) {
-      if (!translations.hasOwnProperty(key)) continue;
-      var parts = key.split(".");
-      var englishKey = parts[parts.length - 1];
-      byEnglish[key] = translations[key];
-    }
-    return byEnglish;
   }
 
   function applyTranslations() {
@@ -162,39 +223,20 @@
       return;
     }
 
-    // First pass: find elements with data-i18n attributes
     var i18nElements = document.querySelectorAll("[data-i18n]");
     for (var i = 0; i < i18nElements.length; i++) {
       var el = i18nElements[i];
       var key = el.getAttribute("data-i18n");
-      if (!originalTexts.has(el)) {
-        originalTexts.set(el, el.textContent);
-      }
-      if (translations[key]) {
-        el.textContent = translations[key];
-      }
+      if (!originalTexts.has(el)) originalTexts.set(el, el.textContent);
+      if (translations[key]) el.textContent = translations[key];
     }
 
-    // Second pass: find elements with data-i18n-placeholder
     var placeholderEls = document.querySelectorAll("[data-i18n-placeholder]");
     for (var j = 0; j < placeholderEls.length; j++) {
       var pEl = placeholderEls[j];
       var pKey = pEl.getAttribute("data-i18n-placeholder");
-      if (!originalTexts.has("placeholder-" + j)) {
-        originalTexts.set("placeholder-" + j, pEl.placeholder);
-      }
-      if (translations[pKey]) {
-        pEl.placeholder = translations[pKey];
-      }
-    }
-
-    // Third pass: text-content matching for elements WITHOUT data-i18n
-    var textMap = {};
-    for (var tKey in translations) {
-      if (!translations.hasOwnProperty(tKey)) continue;
-      // The key format is "original English" -> "translation"
-      // We look for keys that start with underscore-less path
-      textMap[tKey] = translations[tKey];
+      if (!originalTexts.has("placeholder-" + j)) originalTexts.set("placeholder-" + j, pEl.placeholder);
+      if (translations[pKey]) pEl.placeholder = translations[pKey];
     }
 
     var nodes = getTranslatableNodes();
@@ -207,12 +249,16 @@
         originalTexts.set(textNode, textNode.nodeValue);
       }
 
-      // Look for exact match in the text-match dictionary
-      if (translations["_text." + trimmed]) {
-        textNode.nodeValue = textNode.nodeValue.replace(
-          trimmed,
-          translations["_text." + trimmed]
-        );
+      var staticKey = "_text." + trimmed;
+      if (translations[staticKey]) {
+        textNode.nodeValue = textNode.nodeValue.replace(trimmed, translations[staticKey]);
+      } else if (CONFIG.autoTranslate && trimmed.length >= CONFIG.minAutoTranslateLength) {
+        var ck = getCacheKey(trimmed, currentLocale);
+        if (autoTranslationCache[ck]) {
+          textNode.nodeValue = textNode.nodeValue.replace(trimmed, autoTranslationCache[ck]);
+        } else if (/[a-zA-Z]/.test(trimmed)) {
+          queueAutoTranslation(textNode, trimmed);
+        }
       }
     }
 
@@ -221,16 +267,10 @@
 
   function restoreOriginals() {
     originalTexts.forEach(function (original, nodeOrKey) {
-      if (typeof nodeOrKey === "string" && nodeOrKey.startsWith("placeholder-")) {
-        // Skip — placeholder restore handled separately
-        return;
-      }
+      if (typeof nodeOrKey === "string" && nodeOrKey.startsWith("placeholder-")) return;
       if (nodeOrKey instanceof Node) {
-        if (nodeOrKey.nodeType === Node.TEXT_NODE) {
-          nodeOrKey.nodeValue = original;
-        } else {
-          nodeOrKey.textContent = original;
-        }
+        if (nodeOrKey.nodeType === Node.TEXT_NODE) nodeOrKey.nodeValue = original;
+        else nodeOrKey.textContent = original;
       } else if (nodeOrKey instanceof Element) {
         nodeOrKey.textContent = original;
       }
@@ -239,9 +279,7 @@
     var placeholderEls = document.querySelectorAll("[data-i18n-placeholder]");
     for (var j = 0; j < placeholderEls.length; j++) {
       var pKey = "placeholder-" + j;
-      if (originalTexts.has(pKey)) {
-        placeholderEls[j].placeholder = originalTexts.get(pKey);
-      }
+      if (originalTexts.has(pKey)) placeholderEls[j].placeholder = originalTexts.get(pKey);
     }
   }
 
@@ -352,20 +390,16 @@
       var info = CONFIG.locales[code];
 
       var btn = document.createElement("button");
-      btn.className = "af-lang-option";
-      if (code === currentLocale) btn.className += " af-active";
+      btn.className = "af-lang-option" + (code === currentLocale ? " af-active" : "");
       btn.setAttribute("role", "menuitem");
       btn.setAttribute("data-locale", code);
-
       btn.innerHTML =
         '<span class="af-flag">' + info.flag + "</span>" +
         "<span>" + info.label + "</span>" +
         '<span class="af-check">' + (code === currentLocale ? "✓" : "") + "</span>";
 
       btn.addEventListener("click", (function (locale) {
-        return function () {
-          switchLocale(locale);
-        };
+        return function () { switchLocale(locale); };
       })(code));
 
       menu.appendChild(btn);
@@ -380,9 +414,7 @@
       menu.classList.remove("af-open");
     });
 
-    menu.addEventListener("click", function (e) {
-      e.stopPropagation();
-    });
+    menu.addEventListener("click", function (e) { e.stopPropagation(); });
 
     container.appendChild(menu);
     container.appendChild(toggle);
@@ -402,7 +434,6 @@
         opt.querySelector(".af-check").textContent = "";
       }
     }
-
     var menu = document.getElementById("af-lang-menu");
     if (menu) menu.classList.remove("af-open");
   }
@@ -416,6 +447,8 @@
 
     currentLocale = locale;
     storeLocale(locale);
+    pendingAutoTranslations = [];
+    clearTimeout(batchTimer);
 
     document.documentElement.setAttribute("lang", locale);
 
@@ -434,20 +467,17 @@
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(function () {
         applyTranslations();
-      }, 200);
+      }, 300);
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function init() {
+    loadAutoCache();
+
     var stored = getStoredLocale();
-    if (stored && CONFIG.locales[stored]) {
-      currentLocale = stored;
-    }
+    if (stored && CONFIG.locales[stored]) currentLocale = stored;
 
     createWidget();
 
