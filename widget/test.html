@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Translation Widget Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #1a1a2e; }
+    h1 { color: #e63946; }
+    .section { margin: 30px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .section h2 { color: #1d3557; margin-top: 0; }
+    .stat { display: inline-block; text-align: center; margin: 10px 20px; }
+    .stat .number { font-size: 2em; font-weight: bold; color: #e63946; }
+    .stat .label { font-size: 0.9em; color: #666; }
+    .btn { display: inline-block; padding: 10px 20px; background: #e63946; color: #fff; text-decoration: none; border-radius: 6px; margin: 5px; }
+    nav { background: #1d3557; padding: 15px 20px; border-radius: 8px; margin-bottom: 30px; }
+    nav a { color: #fff; text-decoration: none; margin-right: 20px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="#">Home</a>
+    <a href="#">About Us</a>
+    <a href="#">Our Services</a>
+    <a href="#">Events</a>
+    <a href="#">Donate</a>
+    <a href="#">Volunteer</a>
+    <a href="#">Contact</a>
+  </nav>
+
+  <h1>Project Angel Food</h1>
+
+  <div class="section">
+    <h2>our mission</h2>
+    <p>Project Angel Food nourishes the health and spirit of vulnerable people facing critical and life-threatening illness, by preparing and delivering medically tailored meals with love, care and dignity.</p>
+  </div>
+
+  <div class="section">
+    <h2>Project Angel food stats</h2>
+    <div class="stat">
+      <div class="number">20 M</div>
+      <div class="label">Meals Served since 1989</div>
+    </div>
+    <div class="stat">
+      <div class="number">48,000</div>
+      <div class="label">Volunteer Hours Invested per Year</div>
+    </div>
+    <div class="stat">
+      <div class="number">2,800</div>
+      <div class="label">Clients Served Per Day</div>
+    </div>
+    <div class="stat">
+      <div class="number">120,000</div>
+      <div class="label">Meals Delivered Per Month</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>programs &amp; Services</h2>
+    <p><strong>Nutrition services</strong> - Under the care of our registered dietitians, and in consultation with the client's primary health care case manager, each client receives one-on-one nutritional ...</p>
+    <p><strong>meal delivery program</strong> - Meals are delivered to each client one day per week, Monday through Friday. The delivery window for each client is a span of four hours. Clients are notified of their .....</p>
+    <a href="#" class="btn">Read More</a>
+  </div>
+
+  <div class="section" style="background: #1d3557; color: #fff;">
+    <h2 style="color: #fff;">HELP US FEED OUR CLIENTS</h2>
+    <a href="#" class="btn">donate</a>
+    <a href="#" class="btn" style="background: #457b9d;">VOLUNTEER</a>
+    <a href="#" class="btn" style="background: #f4a261; color: #1a1a2e;">Learn more</a>
+  </div>
+
+  <div class="section">
+    <h2>OUR EVENTS</h2>
+    <p>No items found.</p>
+    <a href="#" class="btn">read more</a>
+  </div>
+
+  <footer style="margin-top: 40px; padding: 20px; background: #f9fafb; border-radius: 8px; text-align: center; color: #666;">
+    <p>Quick Links | Contact Us | Follow Us</p>
+    <p>922 Vine Street, Los Angeles, CA 90038 | (323) 845-1800</p>
+    <p>Privacy Policy | Terms of Service</p>
+  </footer>
+
+  <script src="./translator.js" data-angelfood-translations-url="./locales"></script>
+</body>
+</html>

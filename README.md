@@ -1,163 +1,139 @@
-# Angelfood.org — Internationalized Website
+# Angelfood.org Translation Widget
 
-A Next.js application with full internationalization (i18n) support for Project Angel Food, built with [next-intl](https://next-intl.dev).
+A free, lightweight translation widget for [angelfood.org](https://www.angelfood.org) that adds multi-language support without requiring Webflow's paid Localization add-on.
 
-## Quick Start
+## How It Works
 
-```bash
-npm install
-npm run dev
+The widget is a single JavaScript file you add to your Webflow site. It:
+
+1. Adds a floating **language picker** button (bottom-right corner)
+2. When a visitor selects a language, it **replaces text on the page** with translations
+3. **Remembers** the visitor's language choice via localStorage
+4. Watches for dynamically loaded content and translates it too
+
+## Supported Languages
+
+| Language | Code | Status |
+|----------|------|--------|
+| English  | `en` | Default (original site content) |
+| Spanish  | `es` | Ready |
+| Russian  | `ru` | Ready |
+| Chinese  | `zh` | Ready |
+| Armenian | `hy` | Starter (needs professional review) |
+
+## Setup: Adding to Your Webflow Site
+
+### Step 1: Host the translation files
+
+The translation files need to be publicly accessible. The easiest option is **GitHub Pages**:
+
+1. In this repository, go to **Settings > Pages**
+2. Set source to **Deploy from a branch**, choose `main`, folder `/ (root)`
+3. Save. Your files will be available at: `https://thoweidy.github.io/project1/widget/locales/`
+
+### Step 2: Add the script to Webflow
+
+1. Open your Webflow project dashboard
+2. Go to **Site Settings** (gear icon) > **Custom Code**
+3. In the **Footer Code** section (Before `</body>` tag), paste:
+
+```html
+<script
+  src="https://thoweidy.github.io/project1/widget/translator.js"
+  data-angelfood-translations-url="https://thoweidy.github.io/project1/widget/locales">
+</script>
 ```
 
-Visit:
-- English: [http://localhost:3000](http://localhost:3000) (default)
-- Spanish: [http://localhost:3000/es](http://localhost:3000/es)
+4. Click **Save Changes**
+5. **Publish** your site
+
+That's it. A language picker globe button will appear on every page.
+
+### Alternative: Self-host the files
+
+If you prefer to host the files yourself (e.g., on your own server or CDN):
+
+1. Upload the `widget/` folder to your server
+2. Update the `src` and `data-angelfood-translations-url` URLs accordingly
+
+## How to Edit Translations
+
+### Editing existing translations
+
+1. Open the translation file in `widget/locales/` (e.g., `es.json` for Spanish)
+2. Find the English text you want to change (the key after `_text.`)
+3. Edit the translated value
+4. Commit and push — GitHub Pages will update automatically
+
+### Translation file format
+
+Each file maps English text to its translation using the `_text.` prefix:
+
+```json
+{
+  "_text.donate": "donar",
+  "_text.VOLUNTEER": "VOLUNTARIADO",
+  "_text.Our Services": "Nuestros Servicios",
+  "_text.read more": "leer más"
+}
+```
+
+The key is `_text.` followed by the **exact English text** as it appears on the page. The value is the translation.
+
+### Adding new text to translate
+
+1. Visit angelfood.org and find the English text you want to translate
+2. Copy the text exactly as it appears (including capitalization)
+3. Add it to each language file:
+
+```json
+{
+  "_text.The exact English text here": "La traducción aquí"
+}
+```
+
+### Adding a new language
+
+1. Create a new file in `widget/locales/` (e.g., `ko.json` for Korean)
+2. Follow the same `_text.` format
+3. Edit `widget/translator.js` and add the language to the `CONFIG.locales` object:
+
+```js
+locales: {
+  en: { label: "English", flag: "🇺🇸" },
+  es: { label: "Español", flag: "🇪🇸" },
+  ko: { label: "한국어", flag: "🇰🇷" },  // new
+  // ...
+},
+```
+
+## Advanced: Using data-i18n Attributes
+
+For more reliable translations on specific elements, you can add `data-i18n` attributes in Webflow:
+
+1. In the Webflow Designer, select an element
+2. Go to **Element Settings** (gear icon) > **Custom Attributes**
+3. Add attribute: `data-i18n` with a value matching a key in your translation file
+
+This is optional — the widget works without it by matching text content directly.
 
 ## Project Structure
 
 ```
-├── messages/                  # Translation files
-│   ├── en.json                # English translations
-│   └── es.json                # Spanish translations
-├── src/
-│   ├── i18n/
-│   │   ├── routing.ts         # Locale routing config (supported locales, default)
-│   │   ├── request.ts         # Server-side locale resolution
-│   │   └── navigation.ts      # Locale-aware Link, useRouter, etc.
-│   ├── middleware.ts           # Detects user locale from browser/URL
-│   ├── components/
-│   │   ├── Header.tsx          # Navigation with language switcher
-│   │   ├── Footer.tsx          # Translated footer
-│   │   └── LanguageSwitcher.tsx# Toggle between languages
-│   └── app/
-│       └── [locale]/           # All pages live under dynamic locale segment
-│           ├── layout.tsx      # Root layout with locale provider
-│           ├── page.tsx        # Home page
-│           ├── about/page.tsx  # About page
-│           ├── programs/page.tsx # Programs page
-│           └── donate/page.tsx # Donate page
+widget/
+├── translator.js          # The translation widget script
+└── locales/
+    ├── es.json            # Spanish translations
+    ├── hy.json            # Armenian translations
+    ├── ru.json            # Russian translations
+    └── zh.json            # Chinese translations
 ```
 
-## How Translation Works
+## Notes
 
-### 1. Translation files (`messages/*.json`)
-
-All translatable text lives in JSON files under `messages/`. Each file is named by its locale code (e.g., `en.json`, `es.json`).
-
-Translations are organized by namespace (page or component):
-
-```json
-{
-  "HomePage": {
-    "heroTitle": "Cooking and Delivering Healthy Meals...",
-    "heroCta": "Donate Now"
-  },
-  "Navigation": {
-    "home": "Home",
-    "about": "About Us"
-  }
-}
-```
-
-### 2. Using translations in components
-
-**Server Components** (recommended for pages):
-```tsx
-import { useTranslations } from "next-intl";
-
-function MyPage() {
-  const t = useTranslations("HomePage");
-  return <h1>{t("heroTitle")}</h1>;
-}
-```
-
-**Client Components** (for interactive elements):
-```tsx
-"use client";
-import { useTranslations } from "next-intl";
-
-function MyButton() {
-  const t = useTranslations("Common");
-  return <button>{t("learnMore")}</button>;
-}
-```
-
-### 3. Locale-aware navigation
-
-Use the custom `Link` from `@/i18n/navigation` instead of Next.js's `Link`:
-
-```tsx
-import { Link } from "@/i18n/navigation";
-
-<Link href="/about">About Us</Link>
-```
-
-This automatically adds the correct locale prefix to URLs.
-
-## Adding a New Language
-
-1. **Create a translation file**: Copy `messages/en.json` to `messages/[locale].json` (e.g., `messages/fr.json` for French)
-
-2. **Translate all strings** in the new file
-
-3. **Register the locale** in `src/i18n/routing.ts`:
-   ```ts
-   export const routing = defineRouting({
-     locales: ["en", "es", "fr"],  // Add new locale here
-     defaultLocale: "en",
-   });
-   ```
-
-4. **Update the language switcher** in `src/components/LanguageSwitcher.tsx` if you want to support more than two languages
-
-5. **Build and test**: Run `npm run build` to verify all routes generate correctly
-
-## Adding New Translatable Content
-
-1. Add the new key to **every** locale file in `messages/`:
-   ```json
-   {
-     "NewSection": {
-       "title": "New Section Title",
-       "description": "Description text here"
-     }
-   }
-   ```
-
-2. Use it in your component:
-   ```tsx
-   const t = useTranslations("NewSection");
-   return <h2>{t("title")}</h2>;
-   ```
-
-## Dynamic Values in Translations
-
-Use ICU message format for dynamic content:
-
-```json
-{
-  "Footer": {
-    "copyright": "© {year} Project Angel Food. All rights reserved."
-  }
-}
-```
-
-```tsx
-t("copyright", { year: new Date().getFullYear() })
-```
-
-## URL Structure
-
-| Locale  | URL Pattern         | Example              |
-|---------|--------------------|-----------------------|
-| English | `/` (default)      | `/about`, `/donate`   |
-| Spanish | `/es/...`          | `/es/about`, `/es/donate` |
-
-The default locale (English) does **not** show a prefix in the URL, configured via `localePrefix: "as-needed"` in `routing.ts`.
-
-## Tech Stack
-
-- **Next.js 16** (App Router)
-- **next-intl** for internationalization
-- **Tailwind CSS** for styling
-- **TypeScript** for type safety
+- The widget does **not** change URLs (no `/es/` prefix). It translates content client-side.
+- Translation happens instantly — there's no page reload.
+- The visitor's language choice persists across page visits.
+- The widget ignores `<script>`, `<style>`, and its own UI elements.
+- A `MutationObserver` handles dynamically loaded content (e.g., Webflow CMS items).
+- The Armenian translations are a starter set and should be reviewed by a native speaker.
